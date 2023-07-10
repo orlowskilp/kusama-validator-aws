@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Network topology for Kusama validator
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+        - Label:
+            default: VPC parameters
+          Parameters:
+            - VpcName
+            - VpcCidr
+            - VpcOwner
+        - Label:
+            default: Security Group parameters
+          Parameters:
+            - ValidatorP2pPort
+            - ValidatorPrometheusPort
+
+    ParameterLabels:
+      VpcName:
+        default: VPC name
+      VpcCidr:
+        default: VPC CIDR block
+      VpcOwner:
+        default: Name of cluster owner
+      ValidatorP2pPort:
+        default: Validator p2p port
+      ValidatorPrometheusPort:
+        default: Validator Prometheus port
+
+Parameters:
+  VpcName:
+    Type: String
+    Default: kusama-validator-vpc
+    MinLength: 1
+    MaxLength: 32
+    Description: Name of VPC
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/26
+    MinLength: 9
+    MaxLength: 18
+    Description: Address range of VPC
+
+  VpcOwner:
+    Type: String
+    Default: me
+    MinLength: 1
+    MaxLength: 64
+    Description: Owner (stored in tags)
+
+  ValidatorP2pPort:
+    Type: Number
+    Default: 30333
+    MinValue: 1025
+    MaxValue: 65535
+    Description: Port number for inter-node communication
+
+  ValidatorPrometheusPort:
+    Type: Number
+    Default: 9090
+    MinValue: 1025
+    MaxValue: 65535
+    Description: Port number for Prometheus metrics
+
+Resources:
+  ValidatorVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName}
+        - Key: Owner
+          Value: !Ref VpcOwner
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  ValidatorVpcIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName}-igw
+        - Key: Owner
+          Value: !Ref VpcOwner
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  ValidatorVpcIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref ValidatorVpcIGW
+      VpcId: !Ref ValidatorVpc
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        !Select
+        - 0
+        - Fn::GetAZs: !Ref AWS::Region
+      CidrBlock: !Ref VpcCidr
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName}-pubsn
+        - Key: Owner
+          Value: !Ref VpcOwner
+        - Key: Stack
+          Value: !Ref AWS::StackName
+      VpcId: !Ref ValidatorVpc
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ValidatorVpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName}-pubsn-rt
+        - Key: Owner
+          Value: !Ref VpcOwner
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  RoutePublicDefault:
+    DependsOn:
+    - ValidatorVpcIGWAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref ValidatorVpcIGW
+
+  PublicRTSubnetAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  ValidatorSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public access on service port
+      VpcId: !Ref ValidatorVpc
+      SecurityGroupIngress:
+      - Description: Validator p2p port
+        FromPort: !Ref ValidatorP2pPort
+        ToPort: !Ref ValidatorP2pPort
+        IpProtocol: "tcp"
+        CidrIp: 0.0.0.0/0
+      - Description: Validator Prometheus port
+        FromPort: !Ref ValidatorPrometheusPort
+        ToPort: !Ref ValidatorPrometheusPort
+        IpProtocol: "tcp"
+        CidrIp: 0.0.0.0/0
+      - Description: Session Manager port
+        FromPort: 443
+        ToPort: 443
+        IpProtocol: "tcp"
+        CidrIp: !Ref VpcCidr
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName}-validator-sg
+        - Key: Owner
+          Value: !Ref VpcOwner
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+# Outputs:
+#   ValidatorVpcArn:
+#     Description: ARN of Validator VPC
+#     Value: !GetAtt ValidatorVpc.Arn
+#     Export:
+#       Name: !Sub ${AWS::StackName}-ValidatorVpcArn
