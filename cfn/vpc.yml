@@ -171,9 +171,21 @@ Resources:
         - Key: Stack
           Value: !Ref AWS::StackName
 
-# Outputs:
-#   ValidatorVpcArn:
-#     Description: ARN of Validator VPC
-#     Value: !GetAtt ValidatorVpc.Arn
-#     Export:
-#       Name: !Sub ${AWS::StackName}-ValidatorVpcArn
+Outputs:
+  ValidatorVpcId:
+    Description: Validator VPC ID
+    Value: !GetAtt ValidatorVpc.VpcId
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-validator-vpc-id
+
+  ValidatorPublicSubnetId:
+    Description: Validator VPC ID
+    Value: !GetAtt PublicSubnet.VpcId
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-validator-subnet-id
+
+  ValidatorSecurityGroupId:
+    Description: Validator Security Group ID
+    Value: !GetAtt ValidatorSecurityGroup.GroupId
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-security-group-id
