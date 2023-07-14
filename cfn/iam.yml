@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Identity Access Manager resources
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+        - Label:
+            default: EC2 instance role parameters
+          Parameters:
+            - Ec2KusamaNodeRoleName
+
+    ParameterLabels:
+      Ec2KusamaNodeRoleName:
+        default: IAM role name for validator EC2 instance
+
+Parameters:
+  Ec2KusamaNodeRoleName:
+    Type: String
+    Default: ec2KusamaNodeRole
+    MinLength: 1
+    MaxLength: 32
+    Description: Name of IAM role for validator EC2 instance
+
+Resources:
+  Ec2KusamaNodeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref Ec2KusamaNodeRoleName
+      Description: Allows validator instance run ECS tasks and use SSM
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+      - Key: Name
+        Value: !Ref Ec2KusamaNodeRoleName
+
+  Ec2KusamaNodeInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref Ec2KusamaNodeRole
+
+Outputs:
+  Ec2KusamaNodeRoleArn:
+    Description: ARN of Kusama node role
+    Value: !GetAtt Ec2KusamaNodeRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-ec2-kusama-node-role-arn
+
+  Ec2KusamaNodeInstanceProfileArn:
+    Description: ARN of Kusama node instance profile
+    Value: !GetAtt Ec2KusamaNodeInstanceProfile.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-ec2-kusama-node-inst-prof-arn
