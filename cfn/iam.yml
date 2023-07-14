@@ -9,18 +9,31 @@ Metadata:
             default: EC2 instance role parameters
           Parameters:
             - Ec2KusamaNodeRoleName
+        - Label:
+            default: ECS task role parameters
+          Parameters:
+            - EcsKusamaNodeTaskExecutionRoleName
 
     ParameterLabels:
       Ec2KusamaNodeRoleName:
         default: IAM role name for validator EC2 instance
+      EcsKusamaNodeTaskExecutionRoleName:
+        default: IAM role name for validator ECS task
 
 Parameters:
   Ec2KusamaNodeRoleName:
     Type: String
     Default: ec2KusamaNodeRole
     MinLength: 1
-    MaxLength: 32
+    MaxLength: 64
     Description: Name of IAM role for validator EC2 instance
+
+  EcsKusamaNodeTaskExecutionRoleName:
+    Type: String
+    Default: ecsKusamaNodeTaskExecutionRole
+    MinLength: 1
+    MaxLength: 64
+    Description: Name of IAM role for validator ECS task
 
 Resources:
   Ec2KusamaNodeRole:
@@ -52,6 +65,27 @@ Resources:
       Roles:
         - !Ref Ec2KusamaNodeRole
 
+  EcsKusamaNodeTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref EcsKusamaNodeTaskExecutionRoleName
+      Description: Allows validator task run on ECS clusters
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+      - Key: Name
+        Value: !Ref EcsKusamaNodeTaskExecutionRoleName
+
 Outputs:
   Ec2KusamaNodeRoleArn:
     Description: ARN of Kusama node role
@@ -64,3 +98,9 @@ Outputs:
     Value: !GetAtt Ec2KusamaNodeInstanceProfile.Arn
     Export:
       Name: !Sub ${AWS::StackName}-${AWS::Region}-ec2-kusama-node-inst-prof-arn
+
+  EcsKusamaTaskExecutionRoleArn:
+    Description: ARN of Kusama task execution role
+    Value: !GetAtt EcsKusamaNodeTaskExecutionRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-ecs-kusama-task-exec-role-arn
