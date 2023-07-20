@@ -14,6 +14,8 @@ Metadata:
             default: KMS key parameters
           Parameters:
             - EbsVolumeEncryptionKeyAliasName
+            - EbsSecretsEncryptionKeyAliasName
+            - SessionManagerEncryptionKeyAliasName
             - EbsVolumeEncryptionKeyDeleteWindow
 
     ParameterLabels:
@@ -23,6 +25,8 @@ Metadata:
         default: ARN of principal with key administrative permissions
       EbsVolumeEncryptionKeyAliasName:
         default: EBS volumes alias
+      EbsSecretsEncryptionKeyAliasName:
+        default: EBS secrets volume alias
       EbsVolumeEncryptionKeyDeleteWindow:
         default: Key deletion window in days
 
@@ -47,6 +51,20 @@ Parameters:
     MinLength: 1
     MaxLength: 64
     Description: Alias for EBS volume encryption key
+
+  EbsSecretsEncryptionKeyAliasName:
+    Type: String
+    Default: kusama/secrets/ebs
+    MinLength: 1
+    MaxLength: 64
+    Description: Alias for secrets EBS volume encryption key
+
+  SessionManagerEncryptionKeyAliasName:
+    Type: String
+    Default: kusama/sessions/sessionmanager
+    MinLength: 1
+    MaxLength: 64
+    Description: Alias for Session Manager session encryption key
 
   EbsVolumeEncryptionKeyDeleteWindow:
     Type: Number
@@ -125,9 +143,84 @@ Resources:
       AliasName: !Sub alias/${EbsVolumeEncryptionKeyAliasName}
       TargetKeyId: !Ref EbsVolumeEncryptionKey
 
+  EbsSecretsEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key to encrypt EBS volumes storing secrets
+      PendingWindowInDays: !Ref EbsVolumeEncryptionKeyDeleteWindow
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: kusama/secrets/ebs
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Ref KusamaKmsEncryptionKeyAdminArn
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:TagResource
+              - kms:UntagResource
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: '*'
+          - Sid: Allow use of the key
+            Effect: Allow
+            Principal:
+              AWS: !Ref KusamaKmsEncryptionKeyUserRoleArn
+            Action:
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlaintext
+            Resource: '*'
+          - Sid: Allow attachment of persistent resources
+            Effect: Allow
+            Principal:
+              AWS: !Ref KusamaKmsEncryptionKeyUserRoleArn
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: true
+      Tags:
+        - Key: Name
+          Value: kusama/secrets/ebs
+
+  EbsSecretsEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${EbsSecretsEncryptionKeyAliasName}
+      TargetKeyId: !Ref EbsSecretsEncryptionKey
+
 Outputs:
   EbsVolumeEncryptionKeyArn:
     Description: ARN of KMS symmetric encryption key for EBS with no secrets
     Value: !GetAtt EbsVolumeEncryptionKey.Arn
     Export:
       Name: !Sub ${AWS::StackName}-${AWS::Region}-kms-kusama-ebs-volumes-key
+
+  EbsSecretsEncryptionKeyArn:
+    Description: ARN of KMS symmetric encryption key for EBS with secrets
+    Value: !GetAtt EbsSecretsEncryptionKey.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-kms-kusama-ebs-secrets-key
