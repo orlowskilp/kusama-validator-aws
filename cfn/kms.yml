@@ -24,9 +24,11 @@ Metadata:
       KusamaKmsEncryptionKeyAdminArn:
         default: ARN of principal with key administrative permissions
       EbsVolumeEncryptionKeyAliasName:
-        default: EBS volumes alias
+        default: EBS volumes key alias
       EbsSecretsEncryptionKeyAliasName:
-        default: EBS secrets volume alias
+        default: EBS secrets volume key alias
+      SessionManagerEncryptionKeyAliasName:
+        default: Session Manager sessions key alias
       EbsVolumeEncryptionKeyDeleteWindow:
         default: Key deletion window in days
 
@@ -212,6 +214,75 @@ Resources:
       AliasName: !Sub alias/${EbsSecretsEncryptionKeyAliasName}
       TargetKeyId: !Ref EbsSecretsEncryptionKey
 
+  SessionManagerEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key to encrypt Session Manager sessions
+      PendingWindowInDays: !Ref EbsVolumeEncryptionKeyDeleteWindow
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: kusama/sessions/sessionmanager
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Ref KusamaKmsEncryptionKeyAdminArn
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:TagResource
+              - kms:UntagResource
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: '*'
+          - Sid: Allow use of the key
+            Effect: Allow
+            Principal:
+              AWS: !Ref KusamaKmsEncryptionKeyUserRoleArn
+            Action:
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlaintext
+            Resource: '*'
+          - Sid: Allow attachment of persistent resources
+            Effect: Allow
+            Principal:
+              AWS: !Ref KusamaKmsEncryptionKeyUserRoleArn
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: true
+      Tags:
+        - Key: Name
+          Value: kusama/sessions/sessionmanager
+
+  SessionManagerEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${SessionManagerEncryptionKeyAliasName}
+      TargetKeyId: !Ref SessionManagerEncryptionKey
+
 Outputs:
   EbsVolumeEncryptionKeyArn:
     Description: ARN of KMS symmetric encryption key for EBS with no secrets
@@ -224,3 +295,9 @@ Outputs:
     Value: !GetAtt EbsSecretsEncryptionKey.Arn
     Export:
       Name: !Sub ${AWS::StackName}-${AWS::Region}-kms-kusama-ebs-secrets-key
+
+  SessionManagerEncryptionKeyArn:
+    Description: ARN of KMS symmetric encryption key for Session Manager sessions
+    Value: !GetAtt SessionManagerEncryptionKey.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-kms-kusama-ssm-sessions-key
