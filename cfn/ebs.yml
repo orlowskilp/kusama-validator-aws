@@ -75,7 +75,7 @@ Parameters:
 Resources:
   EbsKusamaValidatorKeyStoreVolume:
     Type: AWS::EC2::Volume
-    # DeletionPolicy: Snapshot
+    DeletionPolicy: Snapshot
     Properties:
       Size: 1
       Encrypted: true
@@ -88,7 +88,7 @@ Resources:
 
   EbsKusamaValidatorChainStateVolume:
     Type: AWS::EC2::Volume
-    # DeletionPolicy: Snapshot
+    DeletionPolicy: Snapshot
     Properties:
       Size: !Ref EbsKusamaValidatorChainStateVolumeSize
       Encrypted: true
