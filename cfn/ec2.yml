@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Compute resources for Kusama validators
+
+Resources:
+  Ec2KusamaValidatorInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      # InstanceType: t2.micro # This type is for testing
+      InstanceType: c6i.2xlarge
+      ImageId: ami-02a89066c48741345 # Pass as a map parameter
+      KeyName: "Lukasz | YubiKey" # Pass a parameter or remove altogether
+      IamInstanceProfile: ksm-iam-stack-Ec2KusamaNodeInstanceProfile-JM8CAUZseHt5 # This needs to be a param
+      SubnetId: subnet-0d83bf912202cea40 # VPC stack needs to return that
+      SecurityGroupIds:
+        - sg-0c37ba68eaea0c86c # This needs to be passed as parameter
+        - sg-04575c7d89a7478f1 # SSH for testing purposes
+      # DisableApiTermination: true
+      CpuOptions:
+        CoreCount: 4
+        ThreadsPerCore: 1
+      PropagateTagsToVolumeOnCreation: true
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            VolumeSize: 8
+            Encrypted: true
+            KmsKeyId: arn:aws:kms:us-east-2:142268170553:key/fb2fba37-5cb3-4bb9-bb51-ebe59f8a0d88 # This needs to be a param
+            DeleteOnTermination: false
+      Volumes:
+        - Device: /dev/xvdf
+          VolumeId: vol-0aa3d9f422cc532a6
+        - Device: /dev/xvdg
+          VolumeId: vol-0fb19477aa3c41a33
+      Tags:
+        - Key: Name
+          Value: test-ksm-instance
+
+  KusamaValidatorEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref Ec2KusamaValidatorInstance
+      Tags:
+        - Key: Name
+          Value: test-ksm-instance-eip
