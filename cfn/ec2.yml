@@ -33,6 +33,18 @@ Resources:
           VolumeId: vol-0aa3d9f422cc532a6
         - Device: /dev/xvdg
           VolumeId: vol-0fb19477aa3c41a33
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          mkdir -p /kusama/chainstate
+          mkdir /kusama/secrets
+          echo "/dev/nvme1n1       /kusama/secrets      xfs     defaults,noauto        1       1" >> /etc/fstab
+          echo "/dev/nvme2n1       /kusama/chainstate      xfs     defaults,noauto        1       1" >> /etc/fstab
+          mkdir /etc/ecs
+          echo "ECS_CLUSTER=test-ksm-cluster" > /etc/ecs/ecs.config
+          yum install -y ecs-init
+          systemctl enable --now docker
+          systemctl enable --now --no-block ecs
       Tags:
         - Key: Name
           Value: test-ksm-instance
