@@ -3,7 +3,20 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Compute resources for Kusama validators
 
 Resources:
+  EcsKusamaValidatorCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: test-ksm-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: test-ksm-cluster
+
   Ec2KusamaValidatorInstance:
+    DependsOn:
+      - EcsKusamaValidatorCluster
     Type: AWS::EC2::Instance
     Properties:
       # InstanceType: t2.micro # This type is for testing

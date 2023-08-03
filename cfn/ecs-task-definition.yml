@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Compute resources for Kusama validators
+
+Resources:
+  EcsKusamaValidatorTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: test-ksm-task
+      ExecutionRoleArn: arn:aws:iam::142268170553:role/ecsKusamaNodeTaskExecutionRole-test
+      RequiresCompatibilities:
+      - EC2
+      Volumes:
+        - Name: chainstate
+          Host:
+            SourcePath: /kusama/chainstate
+        - Name: secrets
+          Host:
+            SourcePath: /kusama/secrets
+      ContainerDefinitions:
+        - Name: test-ksm-task-container
+          Image: parity/polkadot:latest
+          Command:
+            - "--name"
+            - "my-test-validator"
+            - "--telemetry-url"
+            - "wss://telemetry-backend.w3f.community/submit 1"
+            - "--prometheus-external"
+            - "--prometheus-port"
+            - "9615"
+            - "--port"
+            - "30333"
+            - "--base-path"
+            - "/polkadot/chainstate"
+            - "--keystore-path"
+            - "/polkadot/secrets"
+            - "--node-key-file"
+            - "/polkadot/secrets/node.key"
+            - "--chain"
+            - "kusama"
+            - "--validator"
+          WorkingDirectory: /polkadot
+          Memory: 14000
+          PortMappings:
+            - ContainerPort: 30333
+              HostPort: 30333
+              Protocol: tcp
+            - ContainerPort: 9615
+              HostPort: 9615
+              Protocol: tcp
+          Essential: true
+          MountPoints:
+            - SourceVolume: chainstate
+              ContainerPath: /polkadot/chainstate
+              ReadOnly: false
+            - SourceVolume: secrets
+              ContainerPath: /polkadot/secrets
+              ReadOnly: false
+          LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group: /ecs/test-ksm-validator
+                awslogs-region: us-east-2
+                awslogs-stream-prefix: ecs
+      Tags:
+        - Key: Name
+          Value: test-ksm-task
+
+  EcsKusamaValidatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/test-ksm-validator
+      RetentionInDays: 60
