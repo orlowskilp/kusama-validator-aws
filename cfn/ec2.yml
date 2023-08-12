@@ -2,36 +2,115 @@ AWSTemplateFormatVersion: 2010-09-09
 
 Description: Compute resources for Kusama validators
 
+# Add the regions you wish to run your validator here. Choose AWS Linux 2023
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-08a52ddb321b32a8c
+    us-east-2:
+      AMI: ami-0ccabb5f82d4c9af5
+    ap-southeast-1:
+      AMI: ami-091a58610910a87a9
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+        - Label:
+            default: ECS cluster parameters
+          Parameters:
+            - EcsKusamaValidatorClusterName
+        - Label:
+            default: EC2 instance parameters
+          Parameters:
+            - Ec2KusamaValidatorInstanceSubnetId
+            - Ec2KusamaValidatorInstanceSecurityGroupId
+            - Ec2KusamaValidatorInstanceSecretsVolumeId
+            - Ec2KusamaValidatorInstanceChainStateVolumeId
+            - Ec2KusamaValidatorInstanceRootVolumeKmsEncryptionKeyArn
+            - Ec2KusamaValidatorInstanceProfile
+            - Ec2KusamaValidatorInstanceKeyName
+
+    ParameterLabels:
+      EcsKusamaValidatorClusterName:
+        default: Name of the ECS cluster
+      Ec2KusamaValidatorInstanceSubnetId:
+        default: EC2 instance subnet
+      Ec2KusamaValidatorInstanceSecurityGroupId:
+        default: EC2 instance security group
+      Ec2KusamaValidatorInstanceSecretsVolumeId:
+        default: EC2 instance chain state volume ID
+      Ec2KusamaValidatorInstanceChainStateVolumeId:
+        default: EC2 instance secrets volume ID
+      Ec2KusamaValidatorInstanceRootVolumeKmsEncryptionKeyArn:
+        default: Root volume encryption KMS key ID
+      Ec2KusamaValidatorInstanceProfile:
+        default: EC2 instance profile
+      Ec2KusamaValidatorInstanceKeyName:
+        default: EC2 instance SSH key
+
+Parameters:
+  EcsKusamaValidatorClusterName:
+    Type: String
+    Default: ksm-cluster
+    Description: Name of the ECS cluster to run Kusama validators in. The cluster will run on an EC2 instance
+
+  Ec2KusamaValidatorInstanceProfile:
+    Type: String
+    Description: Name of the Kusama validator EC2 instance profile corresponding to an IAM role with assigned permissions
+
+  Ec2KusamaValidatorInstanceSubnetId:
+    Type: String
+    Description: ID of the public subnet the Kusama validator is going to run in
+
+  Ec2KusamaValidatorInstanceSecurityGroupId:
+    Type: String
+    Description: ID of the security group controlling the traffic to Kusama validator instance
+
+  Ec2KusamaValidatorInstanceSecretsVolumeId:
+    Type: String
+    Description: ID of the volume storing Kusama validator signing keys
+
+  Ec2KusamaValidatorInstanceChainStateVolumeId:
+    Type: String
+    Description: ID of the volume storing Kusama validator chain state
+
+  Ec2KusamaValidatorInstanceRootVolumeKmsEncryptionKeyArn:
+    Type: String
+    Description: ARN of the KMS encryption key used to encrypt the root volume (the same as root volume)
+
+  Ec2KusamaValidatorInstanceKeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: SSH key to access the shell of the validator instance
+
 Resources:
   EcsKusamaValidatorCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: test-ksm-cluster
+      ClusterName: !Ref EcsKusamaValidatorClusterName
       ClusterSettings:
         - Name: containerInsights
           Value: enabled
       Tags:
         - Key: Name
-          Value: test-ksm-cluster
+          Value: !Ref EcsKusamaValidatorClusterName
 
   Ec2KusamaValidatorInstance:
     DependsOn:
       - EcsKusamaValidatorCluster
     Type: AWS::EC2::Instance
     Properties:
-      # InstanceType: t2.micro # This type is for testing
-      InstanceType: c6i.2xlarge
-      ImageId: ami-02a89066c48741345 # Pass as a map parameter
-      KeyName: "Lukasz | YubiKey" # Pass a parameter or remove altogether
-      IamInstanceProfile: ksm-iam-stack-Ec2KusamaNodeInstanceProfile-JM8CAUZseHt5 # This needs to be a param
-      SubnetId: subnet-0d83bf912202cea40 # VPC stack needs to return that
+      InstanceType: t2.micro # This type is for testing
+      # InstanceType: c6i.2xlarge
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      KeyName: !Ref Ec2KusamaValidatorInstanceKeyName
+      IamInstanceProfile: !Ref Ec2KusamaValidatorInstanceProfile
+      SubnetId: !Ref Ec2KusamaValidatorInstanceSubnetId
       SecurityGroupIds:
-        - sg-0c37ba68eaea0c86c # This needs to be passed as parameter
-        - sg-04575c7d89a7478f1 # SSH for testing purposes
+        - !Ref Ec2KusamaValidatorInstanceSecurityGroupId
       # DisableApiTermination: true
-      CpuOptions:
-        CoreCount: 4
-        ThreadsPerCore: 1
+      # CpuOptions:
+      #   CoreCount: 4
+      #   ThreadsPerCore: 1
       PropagateTagsToVolumeOnCreation: true
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
@@ -39,28 +118,28 @@ Resources:
             VolumeType: gp2
             VolumeSize: 8
             Encrypted: true
-            KmsKeyId: arn:aws:kms:us-east-2:142268170553:key/fb2fba37-5cb3-4bb9-bb51-ebe59f8a0d88 # This needs to be a param
+            KmsKeyId: !Ref Ec2KusamaValidatorInstanceRootVolumeKmsEncryptionKeyArn
             DeleteOnTermination: false
       Volumes:
         - Device: /dev/xvdf
-          VolumeId: vol-0aa3d9f422cc532a6
+          VolumeId: !Ref Ec2KusamaValidatorInstanceChainStateVolumeId
         - Device: /dev/xvdg
-          VolumeId: vol-0fb19477aa3c41a33
+          VolumeId: !Ref Ec2KusamaValidatorInstanceSecretsVolumeId
       UserData:
-        Fn::Base64: |
+        Fn::Base64: !Sub |
           #!/bin/bash
           mkdir -p /kusama/chainstate
           mkdir /kusama/secrets
-          echo "/dev/nvme1n1       /kusama/secrets      xfs     defaults,noauto        1       1" >> /etc/fstab
-          echo "/dev/nvme2n1       /kusama/chainstate      xfs     defaults,noauto        1       1" >> /etc/fstab
+          echo "/dev/nvme1n1       /kusama/chainstate      xfs     defaults,noauto        1       1" >> /etc/fstab
+          echo "/dev/nvme2n1       /kusama/secrets      xfs     defaults,noauto        1       1" >> /etc/fstab
           mkdir /etc/ecs
-          echo "ECS_CLUSTER=test-ksm-cluster" > /etc/ecs/ecs.config
+          echo "ECS_CLUSTER=${EcsKusamaValidatorClusterName}" > /etc/ecs/ecs.config
           yum install -y ecs-init
           systemctl enable --now docker
           systemctl enable --now --no-block ecs
       Tags:
         - Key: Name
-          Value: test-ksm-instance
+          Value: !Sub ${EcsKusamaValidatorClusterName}-instance
 
   KusamaValidatorEip:
     Type: AWS::EC2::EIP
@@ -68,4 +147,17 @@ Resources:
       InstanceId: !Ref Ec2KusamaValidatorInstance
       Tags:
         - Key: Name
-          Value: test-ksm-instance-eip
+          Value: !Sub ${EcsKusamaValidatorClusterName}-eip
+
+Outputs:
+  KusamaValidatorIpAddress:
+    Description: Kusama Validator IP Address
+    Value: !GetAtt KusamaValidatorEip.PublicIp
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-validator-pub-ip
+
+  EcsKusamaValidatorClusterArn:
+    Description: Kusama Validator Cluster ARN
+    Value: !GetAtt EcsKusamaValidatorCluster.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-${AWS::Region}-validator-cluster-arn
