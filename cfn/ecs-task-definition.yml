@@ -1,13 +1,54 @@
 AWSTemplateFormatVersion: 2010-09-09
 
-Description: Compute resources for Kusama validators
+Description: ECS Kusama validator task definition
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+        - Label:
+            default: ECS Task Definition parameters
+          Parameters:
+            - EcsKusamaValidatorTaskDefinitionName
+            - EcsKusamaValidatorTelemetryName
+            - EcsKusamaValidatorNodeKeyPath
+            - EcsKusamaValidatorTaskExecutionRole
+
+    ParameterLabels:
+      EcsKusamaValidatorTaskDefinitionName:
+        default: Task definition name
+      EcsKusamaValidatorTelemetryName:
+        default: Validator name in W3F telemetry
+      EcsKusamaValidatorNodeKeyPath:
+        default: Node key file in (suggestion - keep in key store)
+      EcsKusamaValidatorTaskExecutionRole:
+        default: Validator task definition role ARN
+
+Parameters:
+  EcsKusamaValidatorTaskDefinitionName:
+    Type: String
+    Default: kusama-validator-task
+    Description: Name of Kusama validator task definition
+
+  EcsKusamaValidatorTelemetryName:
+    Type: String
+    Default: my-very-own-kusama-validator
+    Description: Name of Kusama validator as it will appear in W3F telemetry (needs to be unique globally)
+
+  EcsKusamaValidatorNodeKeyPath:
+    Type: String
+    Default: node.key
+    Description: Path to node key file in the key store (suggestion - create node.key file in the root of the secrets volume)
+
+  EcsKusamaValidatorTaskExecutionRole:
+    Type: String
+    Description: ARN of Kusama validator IAM execution role
 
 Resources:
   EcsKusamaValidatorTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: test-ksm-task
-      ExecutionRoleArn: arn:aws:iam::142268170553:role/ecsKusamaNodeTaskExecutionRole-test
+      Family: !Ref EcsKusamaValidatorTaskDefinitionName
+      ExecutionRoleArn: !Ref EcsKusamaValidatorTaskExecutionRole
       RequiresCompatibilities:
       - EC2
       Volumes:
@@ -18,11 +59,11 @@ Resources:
           Host:
             SourcePath: /kusama/secrets
       ContainerDefinitions:
-        - Name: test-ksm-task-container
+        - Name: !Sub ${EcsKusamaValidatorTaskDefinitionName}-container
           Image: parity/polkadot:latest
           Command:
             - "--name"
-            - "my-test-validator"
+            - !Sub "${EcsKusamaValidatorTelemetryName}"
             - "--telemetry-url"
             - "wss://telemetry-backend.w3f.community/submit 1"
             - "--prometheus-external"
@@ -35,7 +76,7 @@ Resources:
             - "--keystore-path"
             - "/polkadot/secrets"
             - "--node-key-file"
-            - "/polkadot/secrets/node.key"
+            - !Sub "/polkadot/secrets/${EcsKusamaValidatorNodeKeyPath}"
             - "--chain"
             - "kusama"
             - "--validator"
@@ -59,15 +100,15 @@ Resources:
           LogConfiguration:
               LogDriver: awslogs
               Options:
-                awslogs-group: /ecs/test-ksm-validator
-                awslogs-region: us-east-2
+                awslogs-group: !Sub /ecs/${EcsKusamaValidatorTaskDefinitionName}
+                awslogs-region: !Sub ${AWS::Region}
                 awslogs-stream-prefix: ecs
       Tags:
         - Key: Name
-          Value: test-ksm-task
+          Value: !Ref EcsKusamaValidatorTaskDefinitionName
 
   EcsKusamaValidatorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /ecs/test-ksm-validator
+      LogGroupName: !Sub /ecs/${EcsKusamaValidatorTaskDefinitionName}
       RetentionInDays: 60
