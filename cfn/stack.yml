@@ -42,6 +42,13 @@ Metadata:
             - StorageEbsKusamaValidatorChainStateVolumeIops
             - StorageEbsKusamaValidatorChainStateVolumeThroughput
             - StorageEbsKusamaValidatorVolumesAz
+      # ECS parameter set
+        - Label:
+            default: ECS Task Definition parameters (Containers)
+          Parameters:
+            - ContainersEcsKusamaValidatorTaskDefinitionName
+            - ContainersEcsKusamaValidatorTelemetryName
+            - ContainersEcsKusamaValidatorNodeKeyPath
 
     ParameterLabels:
     # IAM parameter set
@@ -78,6 +85,13 @@ Metadata:
         default: Throughput of chain state volume
       StorageEbsKusamaValidatorVolumesAz:
         default: Volumes AZ
+    # ECS parameter set
+      ContainersEcsKusamaValidatorTaskDefinitionName:
+        default: Task definition name
+      ContainersEcsKusamaValidatorTelemetryName:
+        default: Validator name in W3F telemetry
+      ContainersEcsKusamaValidatorNodeKeyPath:
+        default: Node key file in (suggestion - keep in key store)
 
 Parameters:
   # IAM parameter set
@@ -189,6 +203,22 @@ Parameters:
     MaxLength: 64
     Description: Availibility Zone of Kusama volumes
 
+  # ECS parameter set
+  ContainersEcsKusamaValidatorTaskDefinitionName:
+    Type: String
+    Default: kusama-validator-task
+    Description: Name of Kusama validator task definition
+
+  ContainersEcsKusamaValidatorTelemetryName:
+    Type: String
+    Default: my-very-own-kusama-validator
+    Description: Name of Kusama validator as it will appear in W3F telemetry (needs to be unique globally)
+
+  ContainersEcsKusamaValidatorNodeKeyPath:
+    Type: String
+    Default: node.key
+    Description: Path to node key file in the key store (suggestion - create node.key file in the root of the secrets volume)
+
 Resources:
   KusamaValidatorIamStack:
     Type: AWS::CloudFormation::Stack
@@ -242,3 +272,16 @@ Resources:
         EbsKusamaValidatorChainStateVolumeThroughput: !Ref StorageEbsKusamaValidatorChainStateVolumeThroughput
         # This should be obtained as output from VPC template
         EbsKusamaValidatorVolumesAz: !Ref StorageEbsKusamaValidatorVolumesAz
+
+  KusamaValidatorEcsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.us-east-2.amazonaws.com/cfn.kusama.orlowski.io/kusama/ecs-task-definition.yml
+      Parameters:
+        EcsKusamaValidatorTaskDefinitionName: !Ref ContainersEcsKusamaValidatorTaskDefinitionName
+        EcsKusamaValidatorTelemetryName: !Ref ContainersEcsKusamaValidatorTelemetryName
+        EcsKusamaValidatorNodeKeyPath: !Ref ContainersEcsKusamaValidatorNodeKeyPath
+        EcsKusamaValidatorTaskExecutionRole:
+          Fn::GetAtt:
+          - KusamaValidatorIamStack
+          - Outputs.EcsKusamaTaskExecutionRoleArn
