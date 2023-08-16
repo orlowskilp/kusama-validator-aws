@@ -14,6 +14,14 @@ Metadata:
             default: ECS task role parameters (IAM)
           Parameters:
             - IamEcsKusamaNodeTaskExecutionRoleName
+      # KMS parameter set
+        - Label:
+            default: KMS key parameters (Security)
+          Parameters:
+            - KmsEbsVolumeEncryptionKeyAliasName
+            - KmsEbsSecretsEncryptionKeyAliasName
+            - KmsSessionManagerEncryptionKeyAliasName
+            - KmsEbsVolumeEncryptionKeyDeleteWindow
       # VPC parameter set
         - Label:
             default: VPC parameters (Network)
@@ -33,6 +41,15 @@ Metadata:
         default: IAM role name for validator EC2 instance
       IamEcsKusamaNodeTaskExecutionRoleName:
         default: IAM role name for validator ECS task
+    # KMS parameter set
+      KmsEbsVolumeEncryptionKeyAliasName:
+        default: EBS volumes key alias
+      KmsEbsSecretsEncryptionKeyAliasName:
+        default: EBS secrets volume key alias
+      KmsSessionManagerEncryptionKeyAliasName:
+        default: Session Manager sessions key alias
+      KmsEbsVolumeEncryptionKeyDeleteWindow:
+        default: Key deletion window in days
     # VPC parameter set
       KusamaVpcName:
         default: VPC name
@@ -61,6 +78,35 @@ Parameters:
     MaxLength: 64
     Description: Name of IAM role for validator ECS task
 
+  # KMS parameter set
+  KmsEbsVolumeEncryptionKeyAliasName:
+    Type: String
+    Default: kusama/volumes/ebs
+    MinLength: 1
+    MaxLength: 64
+    Description: Alias for EBS volume encryption key
+
+  KmsEbsSecretsEncryptionKeyAliasName:
+    Type: String
+    Default: kusama/secrets/ebs
+    MinLength: 1
+    MaxLength: 64
+    Description: Alias for secrets EBS volume encryption key
+
+  KmsSessionManagerEncryptionKeyAliasName:
+    Type: String
+    Default: kusama/sessions/sessionmanager
+    MinLength: 1
+    MaxLength: 64
+    Description: Alias for Session Manager session encryption key
+
+  KmsEbsVolumeEncryptionKeyDeleteWindow:
+    Type: Number
+    Default: 7
+    MinValue: 7
+    MaxValue: 30
+    Description: How many days are needed before permanently deleting the key, [7-30]
+
   # VPC parameter set
   KusamaVpcName:
     Type: String
@@ -81,7 +127,7 @@ Parameters:
     Default: me
     MinLength: 1
     MaxLength: 64
-    Description: Owner (stored in tags)
+    Description: Owner (the IAM user you are operating as)
 
   KusamaValidatorP2pPort:
     Type: Number
@@ -106,6 +152,21 @@ Resources:
         Ec2KusamaNodeRoleName: !Ref IamEc2KusamaNodeRoleName
         EcsKusamaNodeTaskExecutionRoleName: !Ref IamEcsKusamaNodeTaskExecutionRoleName
 
+  KusamaValidatorKmsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.us-east-2.amazonaws.com/cfn.kusama.orlowski.io/kusama/kms.yml
+      Parameters:
+        KusamaKmsEncryptionKeyUserRoleArn:
+          Fn::GetAtt:
+          - KusamaValidatorIamStack
+          - Outputs.Ec2KusamaNodeRoleArn
+        KusamaKmsEncryptionKeyAdminArn: !Sub arn:aws:iam::${AWS::AccountId}:user/${KusamaVpcOwner}
+        EbsVolumeEncryptionKeyAliasName: !Ref KmsEbsVolumeEncryptionKeyAliasName
+        EbsSecretsEncryptionKeyAliasName: !Ref KmsEbsSecretsEncryptionKeyAliasName
+        SessionManagerEncryptionKeyAliasName: !Ref KmsSessionManagerEncryptionKeyAliasName
+        EbsVolumeEncryptionKeyDeleteWindow: !Ref KmsEbsVolumeEncryptionKeyDeleteWindow
+
   KusamaValidatorVpcStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -116,15 +177,3 @@ Resources:
         VpcOwner: !Ref KusamaVpcOwner
         ValidatorP2pPort: !Ref KusamaValidatorP2pPort
         ValidatorPrometheusPort: !Ref KusamaValidatorPrometheusPort
-
-  # KusamaValidatorKmsStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     TemplateURL: https://s3.us-east-2.amazonaws.com/cfn.kusama.orlowski.io/kusama/kms.yml
-  #     Parameters:
-  #       KusamaKmsEncryptionKeyUserRoleArn:
-  #       KusamaKmsEncryptionKeyAdminArn:
-  #       EbsVolumeEncryptionKeyAliasName:
-  #       EbsSecretsEncryptionKeyAliasName:
-  #       SessionManagerEncryptionKeyAliasName:
-  #       EbsVolumeEncryptionKeyDeleteWindow:
