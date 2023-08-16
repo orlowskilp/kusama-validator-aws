@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: CloudFormation stack piecing all the components together
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      # IAM parameter set
+        - Label:
+            default: EC2 instance role parameters (IAM)
+          Parameters:
+            - IamEc2KusamaNodeRoleName
+        - Label:
+            default: ECS task role parameters (IAM)
+          Parameters:
+            - IamEcsKusamaNodeTaskExecutionRoleName
+      # VPC parameter set
+        - Label:
+            default: VPC parameters (Network)
+          Parameters:
+            - KusamaVpcName
+            - KusamaVpcCidr
+            - KusamaVpcOwner
+        - Label:
+            default: Security Group parameters (Network)
+          Parameters:
+            - KusamaValidatorP2pPort
+            - KusamaValidatorPrometheusPort
+
+    ParameterLabels:
+    # IAM parameter set
+      IamEc2KusamaNodeRoleName:
+        default: IAM role name for validator EC2 instance
+      IamEcsKusamaNodeTaskExecutionRoleName:
+        default: IAM role name for validator ECS task
+    # VPC parameter set
+      KusamaVpcName:
+        default: VPC name
+      KusamaVpcCidr:
+        default: VPC CIDR block
+      KusamaVpcOwner:
+        default: Name of cluster owner
+      KusamaValidatorP2pPort:
+        default: Validator p2p port
+      KusamaValidatorPrometheusPort:
+        default: Validator Prometheus port
+
+Parameters:
+  # IAM parameter set
+  IamEc2KusamaNodeRoleName:
+    Type: String
+    Default: ec2KusamaNodeRole
+    MinLength: 1
+    MaxLength: 64
+    Description: Name of IAM role for validator EC2 instance
+
+  IamEcsKusamaNodeTaskExecutionRoleName:
+    Type: String
+    Default: ecsKusamaNodeTaskExecutionRole
+    MinLength: 1
+    MaxLength: 64
+    Description: Name of IAM role for validator ECS task
+
+  # VPC parameter set
+  KusamaVpcName:
+    Type: String
+    Default: kusama-validator-vpc
+    MinLength: 1
+    MaxLength: 32
+    Description: Name of VPC
+
+  KusamaVpcCidr:
+    Type: String
+    Default: 10.0.0.0/26
+    MinLength: 9
+    MaxLength: 18
+    Description: Address range of VPC
+
+  KusamaVpcOwner:
+    Type: String
+    Default: me
+    MinLength: 1
+    MaxLength: 64
+    Description: Owner (stored in tags)
+
+  KusamaValidatorP2pPort:
+    Type: Number
+    Default: 30333
+    MinValue: 1025
+    MaxValue: 65535
+    Description: Port number for inter-node communication
+
+  KusamaValidatorPrometheusPort:
+    Type: Number
+    Default: 9090
+    MinValue: 1025
+    MaxValue: 65535
+    Description: Port number for Prometheus metrics
+
+Resources:
+  KusamaValidatorIamStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.us-east-2.amazonaws.com/cfn.kusama.orlowski.io/kusama/iam.yml
+      Parameters:
+        Ec2KusamaNodeRoleName: !Ref IamEc2KusamaNodeRoleName
+        EcsKusamaNodeTaskExecutionRoleName: !Ref IamEcsKusamaNodeTaskExecutionRoleName
+
+  KusamaValidatorVpcStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.us-east-2.amazonaws.com/cfn.kusama.orlowski.io/kusama/vpc.yml
+      Parameters:
+        VpcName: !Ref KusamaVpcName
+        VpcCidr: !Ref KusamaVpcCidr
+        VpcOwner: !Ref KusamaVpcOwner
+        ValidatorP2pPort: !Ref KusamaValidatorP2pPort
+        ValidatorPrometheusPort: !Ref KusamaValidatorPrometheusPort
+
+  # KusamaValidatorKmsStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     TemplateURL: https://s3.us-east-2.amazonaws.com/cfn.kusama.orlowski.io/kusama/kms.yml
+  #     Parameters:
+  #       KusamaKmsEncryptionKeyUserRoleArn:
+  #       KusamaKmsEncryptionKeyAdminArn:
+  #       EbsVolumeEncryptionKeyAliasName:
+  #       EbsSecretsEncryptionKeyAliasName:
+  #       SessionManagerEncryptionKeyAliasName:
+  #       EbsVolumeEncryptionKeyDeleteWindow:
