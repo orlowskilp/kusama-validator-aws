@@ -49,6 +49,15 @@ Metadata:
             - ContainersEcsKusamaValidatorTaskDefinitionName
             - ContainersEcsKusamaValidatorTelemetryName
             - ContainersEcsKusamaValidatorNodeKeyPath
+      # EC2 parameter set
+        - Label:
+            default: ECS cluster parameters (Compute)
+          Parameters:
+            - ComputeEcsKusamaValidatorClusterName
+        - Label:
+            default: EC2 instance parameters (Compute)
+          Parameters:
+            - ComputeEc2KusamaValidatorInstanceKeyName
 
     ParameterLabels:
     # IAM parameter set
@@ -92,6 +101,11 @@ Metadata:
         default: Validator name in W3F telemetry
       ContainersEcsKusamaValidatorNodeKeyPath:
         default: Node key file in (suggestion - keep in key store)
+    # EC2 parameter set
+      ComputeEcsKusamaValidatorClusterName:
+        default: Name of the ECS cluster
+      ComputeEc2KusamaValidatorInstanceKeyName:
+        default: EC2 instance SSH key
 
 Parameters:
   # IAM parameter set
@@ -219,6 +233,16 @@ Parameters:
     Default: node.key
     Description: Path to node key file in the key store (suggestion - create node.key file in the root of the secrets volume)
 
+  # EC2 parameter set
+  ComputeEcsKusamaValidatorClusterName:
+    Type: String
+    Default: kusama-validator-cluster
+    Description: Name of the ECS cluster to run Kusama validators in. The cluster will run on an EC2 instance
+
+  ComputeEc2KusamaValidatorInstanceKeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: SSH key to access the shell of the validator instance
+
 Resources:
   KusamaValidatorIamStack:
     Type: AWS::CloudFormation::Stack
@@ -285,3 +309,35 @@ Resources:
           Fn::GetAtt:
           - KusamaValidatorIamStack
           - Outputs.EcsKusamaTaskExecutionRoleArn
+
+  KusamaValidatorEc2Stack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.us-east-2.amazonaws.com/cfn.kusama.orlowski.io/kusama/ec2.yml
+      Parameters:
+        EcsKusamaValidatorClusterName: !Ref ComputeEcsKusamaValidatorClusterName
+        Ec2KusamaValidatorInstanceSubnetId:
+          Fn::GetAtt:
+          - KusamaValidatorVpcStack
+          - Outputs.ValidatorPublicSubnetId
+        Ec2KusamaValidatorInstanceSecurityGroupId:
+          Fn::GetAtt:
+          - KusamaValidatorVpcStack
+          - Outputs.ValidatorSecurityGroupId
+        Ec2KusamaValidatorInstanceSecretsVolumeId:
+          Fn::GetAtt:
+          - KusamaValidatorEbsStack
+          - Outputs.EbsKusamaValidatorKeyStoreVolumeId
+        Ec2KusamaValidatorInstanceChainStateVolumeId:
+          Fn::GetAtt:
+          - KusamaValidatorEbsStack
+          - Outputs.EbsKusamaValidatorChainStateVolumeId
+        Ec2KusamaValidatorInstanceRootVolumeKmsEncryptionKeyArn:
+          Fn::GetAtt:
+          - KusamaValidatorKmsStack
+          - Outputs.EbsVolumeEncryptionKeyArn
+        Ec2KusamaValidatorInstanceProfile:
+          Fn::GetAtt:
+          - KusamaValidatorIamStack
+          - Outputs.Ec2KusamaNodeInstanceProfileArn
+        Ec2KusamaValidatorInstanceKeyName: !Ref ComputeEc2KusamaValidatorInstanceKeyName
